@@ -1,6 +1,6 @@
 window.__portalStatus({
  "id": "itknow",
- "updated": "2026-10-19",
+ "updated": "2026-10-20",
  "headline": "知識 117 枚 ・ 呼び分け 34 組",
  "sub": "IT・インターネット／データサイエンス／統計",
  "items": [

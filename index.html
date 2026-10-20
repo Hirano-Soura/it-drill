@@ -69,6 +69,8 @@
   .pair{font-size:14px;margin:6px 0;padding:8px 12px;background:var(--bg3);border-radius:8px}
   .pair b{display:block;font-size:12px;color:var(--fg3)}
   .pair.same b{color:var(--ok)} .pair.diff b{color:var(--star)}
+  .see{font-size:13px;color:var(--fg3);margin:10px 0 0}
+  .see button{display:block;text-align:left;background:none;border:none;color:var(--acfg);font-size:13px;padding:3px 0}
 </style>
 </head>
 <body>
@@ -191,9 +193,12 @@ window.__addIT = function(o){
   // ---- 呼び分けのデータから、読む一覧と問題を組み立てる（LC-10） ----
   //   1 組につき「同じか・どこで違うか」の問題を 1 枚、例文 1 つにつき「どの場面の言い方か」の問題を 1 枚
   function quote(t){ return "「" + t + "」"; }
+  var ALIAS_MADE = {};
   function aliasCards(entries){
     var out = [];
     entries.forEach(function(e){
+      if (ALIAS_MADE[e.id]) { out = out.concat(ALIAS_MADE[e.id]); return; }
+      var start = out.length;
       out.push({ id:"alias-"+e.id, star:false, terms:e.terms,
         q: e.terms.map(quote).join("と") + "は、同じものですか。違うのはどんな場面ですか",
         same:e.same, diff:e.diff, more:e.more, why:e.why });
@@ -202,15 +207,25 @@ window.__addIT = function(o){
           q: quote(x.text) + " ―― この" + quote(x.term) + "は、どの場面の言い方ですか",
           a: x.scene, more: ["組: " + e.terms.join("・"), "違う場面: " + e.diff] });
       });
+      ALIAS_MADE[e.id] = out.slice(start);
     });
     return out;
   }
   // 分野ごとに、知識のカテゴリと呼び分けのデッキを並べる。呼び分けは category と同じ形にして画面を共用する
+  //   1 つの問いは、定義した所のほかに also で宣言した所にも出す（LC-11）。カードは同じものを指すので、記録も共通
+  //   知識のカードの also はカテゴリの id、呼び分けの組の also は分野の id
+  var SHARED = {};
+  CATS.forEach(function(c){ c.cards.forEach(function(x){
+    (x.also || []).forEach(function(to){ (SHARED[to] = SHARED[to] || []).push(x); });
+  }); });
   var DECKS = [];
   FIELDS.forEach(function(f){
-    CATS.forEach(function(c){ if (c.field === f.id) DECKS.push({id:c.id, field:f, title:c.title, lead:c.lead, cards:c.cards, alias:false}); });
+    CATS.forEach(function(c){ if (c.field === f.id) DECKS.push({id:c.id, field:f, title:c.title, lead:c.lead,
+      cards:c.cards.concat(SHARED[c.id] || []), nShared:(SHARED[c.id] || []).length, alias:false}); });
     var entries = [];
-    ALIASES.forEach(function(a){ if (a.field === f.id) entries = entries.concat(a.entries); });
+    ALIASES.forEach(function(a){ a.entries.forEach(function(e){
+      if (a.field === f.id || (e.also || []).indexOf(f.id) >= 0) entries.push(e);
+    }); });
     if (entries.length) DECKS.push({id:"alias-"+f.id, field:f, title:"呼び分け", alias:true, cards:aliasCards(entries),
       lead:"同じものが場面によって別の名前で呼ばれる組。「どの場面で同じで、どの場面で違うか」を言えるようにする。"});
   });
@@ -239,6 +254,13 @@ window.__addIT = function(o){
     DECKS.forEach(function(d){ d.cards.forEach(function(x){ out.push({deck:d, card:x}); }); });
     return out;
   }
+  // 問いごとに、出てくるデッキの並び（LC-11）。同じ問いを 2 度数えないときにも使う
+  var PLACES = {};
+  allCards().forEach(function(x){ (PLACES[x.card.id] = PLACES[x.card.id] || []).push(x.deck); });
+  function uniqueCards(list){
+    var seen = {};
+    return list.filter(function(x){ var id = (x.card || x).id; if (seen[id]) return false; seen[id] = true; return true; });
+  }
   function counts(cards){
     var o=0,n=0;
     cards.forEach(function(x){ var m=state.marks[x.id]; if(m===OK)o++; else if(m===NG)n++; });
@@ -264,7 +286,19 @@ window.__addIT = function(o){
     d.appendChild(document.createTextNode(text));
     return d;
   }
-  function cardBody(card){
+  function placesBox(card, here){
+    var others = (PLACES[card.id] || []).filter(function(d){ return d !== here; });
+    if (!others.length) return null;
+    var s = el("div","see");
+    s.appendChild(el("b",null,PORTAL.alsoLabel));
+    others.forEach(function(d){
+      var b = el("button",null,"↔ "+d.field.title+" › "+d.title);
+      b.onclick = function(){ openRead(d, card.id); };
+      s.appendChild(b);
+    });
+    return s;
+  }
+  function cardBody(card, here){
     var box = el("div");
     if (card.same != null) {
       box.appendChild(pair("same","同じ場面",card.same));
@@ -283,6 +317,7 @@ window.__addIT = function(o){
       d.appendChild(document.createTextNode(card.why));
       box.appendChild(d);
     }
+    var pl = placesBox(card, here); if (pl) box.appendChild(pl);
     return box;
   }
   function qLine(card){
@@ -304,7 +339,7 @@ window.__addIT = function(o){
     var stars = d.cards.filter(function(x){return x.star;}).length;
     var b = el("button","deck"+(d.alias?" alias":""));
     b.appendChild(el("b",null,d.title));
-    b.appendChild(el("span",null,d.cards.length+" 枚"+(stars?"（★ "+stars+"）":"")+" ／ 言えた "+cc.ok+" ・ やり直し "+cc.ng));
+    b.appendChild(el("span",null,d.cards.length+" 枚"+(stars?"（★ "+stars+"）":"")+(d.nShared?"（ほかから "+d.nShared+"）":"")+" ／ 言えた "+cc.ok+" ・ やり直し "+cc.ng));
     var bar = el("div","bar");
     var io = el("i","o"); io.style.width = (100*cc.ok/cc.all)+"%";
     var inn = el("i","n"); inn.style.width = (100*cc.ng/cc.all)+"%";
@@ -315,7 +350,7 @@ window.__addIT = function(o){
   function renderHome(){
     document.title = PORTAL.title;
     $("title").textContent = PORTAL.title;
-    var c = counts(allCards().map(function(x){return x.card;}));
+    var c = counts(uniqueCards(allCards()).map(function(x){return x.card;}));
     $("total").textContent = c.ok+" / "+c.ng+" / "+c.all;
     $("lead").textContent = PORTAL.lead;
     var how = $("how"); how.innerHTML = "";
@@ -360,22 +395,24 @@ window.__addIT = function(o){
       if (state.filter==="ng") return m===NG;
       if (state.filter==="new") return !m;
       return true;
-    });
+    }).filter((function(){ var seen = {}; return function(x){
+      if (seen[x.card.id]) return false; seen[x.card.id] = true; return true; }; })());
   }
 
   // ---- 読む ----
   var curDeck = null;
-  function openRead(d){
+  function openRead(d, focus){
     curDeck = d;
     $("readTitle").textContent = d.field.title+" › "+d.title;
     $("readLead").textContent = d.lead;
     var list = $("readList"); list.innerHTML = "";
+    var focusEl = null;
     d.cards.forEach(function(card){
       var it = el("div","item");
       var head = el("div"); head.appendChild(markTag(card.id));
       it.appendChild(head);
       it.appendChild(qLine(card));
-      var body = cardBody(card); body.classList.add("hidden","body");
+      var body = cardBody(card, d); body.classList.add("hidden","body");
       var t = el("button","toggle","答えを見る ▼");
       t.onclick = function(){
         var h = body.classList.toggle("hidden");
@@ -392,8 +429,10 @@ window.__addIT = function(o){
       r.appendChild(ng); r.appendChild(ok);
       it.appendChild(r);
       list.appendChild(it);
+      if (card.id === focus){ body.classList.remove("hidden"); t.textContent = "閉じる ▲"; focusEl = it; }
     });
     show("read");
+    if (focusEl && focusEl.scrollIntoView) focusEl.scrollIntoView();
   }
   $("openAll").onclick = function(){
     var bodies = $("readList").querySelectorAll(".item .body");
@@ -422,7 +461,7 @@ window.__addIT = function(o){
     var q = $("dQ"); q.innerHTML = "";
     if (x.card.star) q.appendChild(el("span","star","★"));
     q.appendChild(document.createTextNode(x.card.q));
-    var a = $("dAns"); a.innerHTML = ""; a.appendChild(cardBody(x.card)); a.classList.add("hidden");
+    var a = $("dAns"); a.innerHTML = ""; a.appendChild(cardBody(x.card, x.deck)); a.classList.add("hidden");
     $("revealBtn").classList.remove("hidden");
     $("judge").classList.add("hidden");
   }

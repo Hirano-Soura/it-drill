@@ -201,6 +201,7 @@ window.__addIT({
     },
     {
       "id": "net-cmd",
+      "also": ["ops"],
       "star": true,
       "q": "通信の確認に使うコマンドを挙げてください",
       "a": "ping で相手に届くかを、traceroute（Windows では tracert）でどこを通っているか・どこで止まるかを、nslookup や dig で名前解決ができるかを確かめます。",
