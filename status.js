@@ -1,8 +1,8 @@
 window.__portalStatus({
  "id": "itknow",
- "updated": "2026-10-20",
- "headline": "知識 117 枚 ・ 呼び分け 34 組",
- "sub": "IT・インターネット／データサイエンス／統計",
+ "updated": "2026-11-06",
+ "headline": "知識 154 枚 ・ 呼び分け 43 組",
+ "sub": "IT・インターネット／データサイエンス／統計／ブロックチェーンと暗号",
  "items": [
   {
    "label": "IT・インターネット",
@@ -18,6 +18,11 @@ window.__portalStatus({
    "label": "統計",
    "state": "ready",
    "detail": "24 枚"
+  },
+  {
+   "label": "ブロックチェーンと暗号",
+   "state": "ready",
+   "detail": "37 枚"
   }
  ]
 });
