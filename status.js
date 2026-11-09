@@ -1,6 +1,6 @@
 window.__portalStatus({
  "id": "itknow",
- "updated": "2026-11-06",
+ "updated": "2026-11-09",
  "headline": "知識 154 枚 ・ 呼び分け 43 組",
  "sub": "IT・インターネット／データサイエンス／統計／ブロックチェーンと暗号",
  "items": [

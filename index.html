@@ -71,6 +71,14 @@
   .pair.same b{color:var(--ok)} .pair.diff b{color:var(--star)}
   .see{font-size:13px;color:var(--fg3);margin:10px 0 0}
   .see button{display:block;text-align:left;background:none;border:none;color:var(--acfg);font-size:13px;padding:3px 0}
+  .ip{font-size:14px;color:var(--fg2);margin:0 0 10px}
+  .ih{font-size:14px;color:var(--fg);margin:14px 0 6px}
+  .ih:first-child{margin-top:0}
+  ul.il{margin:0 0 10px;padding-left:20px} ul.il li{font-size:14px;color:var(--fg2);margin:3px 0}
+  .tw{overflow-x:auto;margin:0 0 12px}
+  table.it{width:100%;border-collapse:collapse;font-size:13px}
+  table.it th{text-align:left;color:var(--fg3);font-weight:normal;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.it td{border-top:1px solid var(--line);padding:4px 6px;color:var(--fg2);vertical-align:top}
 </style>
 </head>
 <body>
@@ -105,14 +113,18 @@
     </div>
   </section>
 
-  <!-- 読む -->
+  <!-- 読む（上に「暗記カードで」、その下に要点（クッション）、最後にカードの一覧） -->
   <section id="read" class="hidden">
     <button class="back" data-go="home">← 戻る</button>
     <h1 id="readTitle"></h1>
     <p class="lead" id="readLead"></p>
-    <div class="row">
+    <div class="card">
+      <button class="btn primary block" id="drillThis"></button>
+    </div>
+    <div class="card"><h2>要点</h2><div id="readIntro"></div></div>
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">カード</h2>
       <button class="btn sm" id="openAll">すべて開く</button>
-      <button class="btn sm" id="drillThis">ここを暗記カードで</button>
     </div>
     <div class="card" id="readList"></div>
   </section>
@@ -225,15 +237,20 @@ window.__addIT = function(o){
   CATS.forEach(function(c){ c.cards.forEach(function(x){
     (x.also || []).forEach(function(to){ (SHARED[to] = SHARED[to] || []).push(x); });
   }); });
+  //   要点（intro）は、カテゴリはデータの intro、呼び分けは組（terms と same）から作る表
+  function aliasIntro(entries){
+    return [{head:["組","同じ点"], rows:entries.map(function(e){ return [e.terms.join("・"), e.same]; })}];
+  }
   var DECKS = [];
   FIELDS.forEach(function(f){
-    CATS.forEach(function(c){ if (c.field === f.id) DECKS.push({id:c.id, field:f, title:c.title, lead:c.lead,
+    CATS.forEach(function(c){ if (c.field === f.id) DECKS.push({id:c.id, field:f, title:c.title, lead:c.lead, intro:c.intro || [],
       cards:c.cards.concat(SHARED[c.id] || []), nShared:(SHARED[c.id] || []).length, alias:false}); });
     var entries = [];
     ALIASES.forEach(function(a){ a.entries.forEach(function(e){
       if (a.field === f.id || (e.also || []).indexOf(f.id) >= 0) entries.push(e);
     }); });
     if (entries.length) DECKS.push({id:"alias-"+f.id, field:f, title:"呼び分け", alias:true, cards:aliasCards(entries),
+      intro:aliasIntro(entries),
       lead:"同じものが場面によって別の名前で呼ばれる組。「どの場面で同じで、どの場面で違うか」を言えるようにする。"});
   });
 
@@ -406,12 +423,41 @@ window.__addIT = function(o){
       if (seen[x.card.id]) return false; seen[x.card.id] = true; return true; }; })());
   }
 
+  // ---- 要点（デッキの前のクッション） ----
+  //   部品の種類: 文字列 = 段落 / {h} = 小見出し / {list} = 箇条 / {head, rows} = 表。種類を知らない部品は出さない
+  function partKind(p){
+    if (typeof p === "string") return "p";
+    if (!p || typeof p !== "object") return null;
+    if (typeof p.h === "string") return "h";
+    if (Array.isArray(p.list)) return "list";
+    if (Array.isArray(p.head) && Array.isArray(p.rows)) return "table";
+    return null;
+  }
+  function renderParts(box, parts){
+    parts.forEach(function(p){
+      var k = partKind(p);
+      if (k === "p") box.appendChild(el("p","ip",p));
+      else if (k === "h") box.appendChild(el("h3","ih",p.h));
+      else if (k === "list"){ var ul = el("ul","il"); p.list.forEach(function(t){ ul.appendChild(el("li",null,t)); }); box.appendChild(ul); }
+      else if (k === "table"){
+        var w = el("div","tw"), tb = el("table","it"), tr = el("tr");
+        p.head.forEach(function(h){ tr.appendChild(el("th",null,h)); });
+        tb.appendChild(tr);
+        p.rows.forEach(function(row){ var r = el("tr"); row.forEach(function(c){ r.appendChild(el("td",null,c)); }); tb.appendChild(r); });
+        w.appendChild(tb); box.appendChild(w);
+      }
+    });
+  }
+
   // ---- 読む ----
   var curDeck = null;
   function openRead(d, focus){
     curDeck = d;
     $("readTitle").textContent = d.field.title+" › "+d.title;
     $("readLead").textContent = d.lead;
+    $("drillThis").textContent = "ここを暗記カードで（"+d.cards.length+" 枚）";
+    var ib = $("readIntro"); ib.innerHTML = "";
+    renderParts(ib, d.intro);
     var list = $("readList"); list.innerHTML = "";
     var focusEl = null;
     d.cards.forEach(function(card){
@@ -502,7 +548,7 @@ window.__addIT = function(o){
   };
 
   // 検査（tests/test_it_knowledge.js）が、組み立てた結果を本体から読めるようにする
-  window.__IT = { DECKS:DECKS, pool:pool, state:state };
+  window.__IT = { DECKS:DECKS, pool:pool, state:state, partKind:partKind };
 
   show("home");
 })();
